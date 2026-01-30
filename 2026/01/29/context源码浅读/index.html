@@ -6,17 +6,19 @@
   
   <title>context源码浅读 | Hexo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <meta name="description" content="context常用来并发协调以及对 goroutine 的生命周期控制. 123456type Context interface &#123;    Deadline() (deadline time.Time, ok bool)    Done() &lt;-chan struct&#123;&#125;    Err() error    Value(key any) any&#125;">
+  <meta name="description" content="context常用来并发协调以及对 goroutine 的生命周期控制. 以下是go 1.24.4版本的context的实现，尝试解读 123456type Context interface &#123;    Deadline() (deadline time.Time, ok bool)    Done() &lt;-chan struct&#123;&#125;    Err() erro">
 <meta property="og:type" content="article">
 <meta property="og:title" content="context源码浅读">
 <meta property="og:url" content="http://example.com/2026/01/29/context%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/index.html">
 <meta property="og:site_name" content="Hexo">
-<meta property="og:description" content="context常用来并发协调以及对 goroutine 的生命周期控制. 123456type Context interface &#123;    Deadline() (deadline time.Time, ok bool)    Done() &lt;-chan struct&#123;&#125;    Err() error    Value(key any) any&#125;">
+<meta property="og:description" content="context常用来并发协调以及对 goroutine 的生命周期控制. 以下是go 1.24.4版本的context的实现，尝试解读 123456type Context interface &#123;    Deadline() (deadline time.Time, ok bool)    Done() &lt;-chan struct&#123;&#125;    Err() erro">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2026-01-29T15:00:32.000Z">
-<meta property="article:modified_time" content="2026-01-29T15:08:36.000Z">
+<meta property="article:modified_time" content="2026-01-30T11:54:32.000Z">
 <meta property="article:author" content="John Doe">
 <meta property="article:tag" content="golang">
+<meta property="article:tag" content="并发">
+<meta property="article:tag" content="context">
 <meta name="twitter:card" content="summary">
   
     <link rel="alternate" href="/atom.xml" title="Hexo" type="application/atom+xml">
@@ -97,6 +99,7 @@
     <div class="e-content article-entry" itemprop="articleBody">
       
         <h1 id="context"><a href="#context" class="headerlink" title="context"></a><strong>context</strong></h1><p>常用来并发协调以及对 goroutine 的生命周期控制.</p>
+<p>以下是go 1.24.4版本的context的实现，尝试解读</p>
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Context <span class="keyword">interface</span> &#123;</span><br><span class="line">    Deadline() (deadline time.Time, ok <span class="type">bool</span>)</span><br><span class="line">    Done() &lt;-<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;</span><br><span class="line">    Err() <span class="type">error</span></span><br><span class="line">    Value(key any) any</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
 <p><strong>Deadline():</strong></p>
@@ -263,16 +266,30 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://example.com/2026/01/29/context%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/" data-id="cmkzladzk00008wts6gn2bwe9" data-title="context源码浅读" class="article-share-link"><span class="fa fa-share">Share</span></a>
+      <a data-url="http://example.com/2026/01/29/context%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/" data-id="cml0tsle20001okts0dkp44hd" data-title="context源码浅读" class="article-share-link"><span class="fa fa-share">Share</span></a>
       
       
       
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/golang/" rel="tag">golang</a></li></ul>
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/context/" rel="tag">context</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/golang/" rel="tag">golang</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
 
     </footer>
   </div>
   
     
+<nav id="article-nav">
+  
+    <a href="/2026/01/30/channel%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Newer</strong>
+      <div class="article-nav-title">
+        
+          channel源码浅读
+        
+      </div>
+    </a>
+  
+  
+</nav>
+
   
 </article>
 
@@ -288,7 +305,7 @@
   <div class="widget-wrap">
     <h3 class="widget-title">Tags</h3>
     <div class="widget">
-      <ul class="tag-list" itemprop="keywords"><li class="tag-list-item"><a class="tag-list-link" href="/tags/golang/" rel="tag">golang</a></li></ul>
+      <ul class="tag-list" itemprop="keywords"><li class="tag-list-item"><a class="tag-list-link" href="/tags/channel/" rel="tag">channel</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/context/" rel="tag">context</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/golang/" rel="tag">golang</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
     </div>
   </div>
 
@@ -298,7 +315,7 @@
   <div class="widget-wrap">
     <h3 class="widget-title">Tag Cloud</h3>
     <div class="widget tagcloud">
-      <a href="/tags/golang/" style="font-size: 10px;">golang</a>
+      <a href="/tags/channel/" style="font-size: 10px;">channel</a> <a href="/tags/context/" style="font-size: 10px;">context</a> <a href="/tags/golang/" style="font-size: 20px;">golang</a> <a href="/tags/%E5%B9%B6%E5%8F%91/" style="font-size: 20px;">并发</a>
     </div>
   </div>
 
@@ -318,6 +335,10 @@
     <h3 class="widget-title">Recent Posts</h3>
     <div class="widget">
       <ul>
+        
+          <li>
+            <a href="/2026/01/30/channel%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/">channel源码浅读</a>
+          </li>
         
           <li>
             <a href="/2026/01/29/context%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/">context源码浅读</a>
