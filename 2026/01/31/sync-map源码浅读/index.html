@@ -1,0 +1,955 @@
+
+<!DOCTYPE html><html lang="zh-CN" data-theme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="hexo-theme" content="https://github.com/xaoxuu/hexo-theme-stellar/tree/1.33.1" theme-name="Stellar" theme-version="1.33.1">
+  
+  
+  <meta name="generator" content="Hexo 7.3.0">
+  <meta http-equiv='x-dns-prefetch-control' content='on' />
+  
+  <meta name="renderer" content="webkit">
+  <meta name="force-rendering" content="webkit">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+  <meta name="HandheldFriendly" content="True" >
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000">
+  <meta name="theme-color" content="#f9fafb">
+  <title>sync.map源码浅读 - jz blog</title>
+
+  
+    <meta name="description" content="sync.map虽然 Go 1.24 把内置 map 的底层实现升级为基于 Swiss Table 的设计，优化了 map 操作速度，但是内置 map 仍然不是并发安全的。想要使用并发安全的 map 有几个方法：  使用 go 提供的 sync.map 支持并发访问（比较适用于特殊场景） 在 GitHub 社区寻找成熟的并发 map 的实现，如：https:&#x2F;&#x2F;github.com&#x2F;orcaman">
+<meta property="og:type" content="article">
+<meta property="og:title" content="sync.map源码浅读">
+<meta property="og:url" content="https://wsp030914.github.io/2026/01/31/sync-map%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/">
+<meta property="og:site_name" content="jz blog">
+<meta property="og:description" content="sync.map虽然 Go 1.24 把内置 map 的底层实现升级为基于 Swiss Table 的设计，优化了 map 操作速度，但是内置 map 仍然不是并发安全的。想要使用并发安全的 map 有几个方法：  使用 go 提供的 sync.map 支持并发访问（比较适用于特殊场景） 在 GitHub 社区寻找成熟的并发 map 的实现，如：https:&#x2F;&#x2F;github.com&#x2F;orcaman">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://wsp030914.github.io/images/jz.jpg">
+<meta property="article:published_time" content="2026-01-31T14:48:28.000Z">
+<meta property="article:modified_time" content="2026-01-31T14:49:42.000Z">
+<meta property="article:author" content="jz">
+<meta property="article:tag" content="golang">
+<meta property="article:tag" content="并发">
+<meta property="article:tag" content="sync.map">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://wsp030914.github.io/images/jz.jpg">
+  
+  
+  
+  <meta name="keywords" content="golang,并发,sync.map">
+
+  <!-- feed -->
+  
+
+  <link rel="stylesheet" href="/css/main.css?v=1.33.1">
+
+
+  
+
+  
+
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"jz","sameAs":[],"image":"https://wsp030914.github.io/images/jz.jpg"},"dateCreated":"2026-01-31T22:48:28+08:00","dateModified":"2026-01-31T22:49:42+08:00","datePublished":"2026-01-31T22:48:28+08:00","description":"","headline":"sync.map源码浅读","mainEntityOfPage":{"@type":"WebPage","@id":"https://wsp030914.github.io/2026/01/31/sync-map%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/"},"publisher":{"@type":"Organization","name":"jz","sameAs":[],"image":"https://wsp030914.github.io/images/jz.jpg","logo":{"@type":"ImageObject","url":"https://wsp030914.github.io/images/jz.jpg"}},"url":"https://wsp030914.github.io/2026/01/31/sync-map%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/","keywords":"golang, 并发, sync.map","image":[]}</script>
+  
+</head>
+<body><div class="sitebg"><div class="siteblur"></div></div>
+
+<div class="l_body content" id="start" layout="post" type="tech" ><aside class="l_left"><div class="sidebg"></div><div class="leftbar-container">
+
+
+<header class="header"><div class="logo-wrap"><a class="avatar" href="/"><div class="bg" style="opacity:0;background-image:url(https://gcore.jsdelivr.net/gh/cdn-x/placeholder@1.0.12/avatar/round/rainbow64@3x.webp);"></div><img no-lazy class="avatar" src="/images/jz.jpg" onerror="javascript:this.classList.add('error');this.src='https://gcore.jsdelivr.net/gh/cdn-x/placeholder@1.0.12/image/2659360.svg';"></a><a class="title" href="/"><div class="main">jz blog</div><div class="sub cap">欢迎大家</div></a></div></header>
+
+<div class="nav-area">
+
+<nav class="menu dis-select"></nav>
+</div>
+<div class="widgets"></div>
+
+</div></aside><div class="l_main" id="main">
+
+
+
+
+
+<div class="article banner top">
+  <div class="content">
+    <div class="top bread-nav footnote"><div class="left"><div class="flex-row" id="breadcrumb"><a class="cap breadcrumb" href="/">主页</a>
+<span class="sep"></span><a class="cap breadcrumb" href="/">文章</a></div>
+<div class="flex-row" id="post-meta"><span class="text created">发布于：<time datetime="2026-01-31T14:48:28.000Z">2026-01-31</time></span><span class="sep updated"></span><span class="text updated">更新于：<time datetime="2026-01-31T14:49:42.000Z">2026-01-31</time></span></div></div></div>
+    
+    <div class="bottom only-title">
+      
+      <div class="text-area">
+        <h1 class="text title"><span>sync.map源码浅读</span></h1>
+        
+      </div>
+    </div>
+    
+  </div>
+  </div><article class="md-text content"><h1 id="sync-map"><a href="#sync-map" class="headerlink" title="sync.map"></a>sync.map</h1><p>虽然 Go 1.24 把内置 map 的底层实现升级为基于 Swiss Table 的设计，优化了 map 操作速度，但是内置 map 仍然不是并发安全的。想要使用并发安全的 map 有几个方法：</p>
+<ol>
+<li>使用 go 提供的 sync.map 支持并发访问（比较适用于特殊场景）</li>
+<li>在 GitHub 社区寻找成熟的并发 map 的实现，如：<a target="_blank" rel="noopener" href="https://github.com/orcaman/concurrent-map">https://github.com/orcaman/concurrent-map</a></li>
+<li>基于 RWMutex + map 自己封装一个并发安全的 map</li>
+</ol>
+<p>接下来我们从 sync.map 的源码去看是怎么实现的并发安全，在文章结尾我也会提供一个基于 RWMutex + map 的并发安全 map 的 demo。</p>
+<h2 id="使用场景"><a href="#使用场景" class="headerlink" title="使用场景"></a>使用场景</h2><p>下面是 go 官方推荐的 sync.map 的使用场景</p>
+<p>&#x2F;&#x2F; The Map type is optimized for two common use cases: (1) when the entry for a given<br>&#x2F;&#x2F; key is only ever written once but read many times, as in caches that only grow,<br>&#x2F;&#x2F; or (2) when multiple goroutines read, write, and overwrite entries for disjoint<br>&#x2F;&#x2F; sets of keys. In these two cases, use of a Map may significantly reduce lock<br>&#x2F;&#x2F; contention compared to a Go map paired with a separate [Mutex] or [RWMutex].</p>
+<p>sync.Map 针对两类常见使用场景进行了优化：</p>
+<ol>
+<li>某个给定 key 的条目只会被写入一次，但会被读取很多次，例如只增不减的缓存；</li>
+<li>多个 goroutine 对彼此不重叠的 key 集合进行读取、写入和覆盖。</li>
+</ol>
+<p>在这两种场景下，相比“普通 map + 单独的 Mutex 或 RWMutex”，使用 sync.Map 可以显著减少锁竞争。</p>
+<h2 id="数据结构"><a href="#数据结构" class="headerlink" title="数据结构"></a>数据结构</h2><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Map <span class="keyword">struct</span> &#123;</span><br><span class="line">	_ noCopy</span><br><span class="line">	mu Mutex</span><br><span class="line">	read atomic.Pointer[readOnly]</span><br><span class="line">	dirty <span class="keyword">map</span>[any]*entry</span><br><span class="line">	misses <span class="type">int</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ol>
+<li>_ noCopy  用来阻止 sync.Map 在使用后被值拷贝。sync.Map 不是普通容器，而是带有并发协议的状态机，内部的锁、原子变量和多视图状态必须保持一致，一旦拷贝就会破坏这些不变量。</li>
+<li>read atomic.Pointer[readOnly] 只读 map，可以不加锁读</li>
+<li>dirty map[any]*entry 加锁处理的可读写 map ，当 dirty 不为 nil 时，read 与 dirty 都会包含所有 未被 expunged 的 entry，并且它们指向的是同一个 entry 对象。</li>
+<li>misses int 记录访问 read 的未命中次数，达到阈值则 dirty map 会被提升为新的 read map</li>
+<li>mu Mutex 互斥锁，控制并发访问 dirty 和 misses</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> readOnly <span class="keyword">struct</span> &#123;</span><br><span class="line">	m       <span class="keyword">map</span>[any]*entry</span><br><span class="line">	amended <span class="type">bool</span> </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> entry <span class="keyword">struct</span> &#123;</span><br><span class="line">	p atomic.Pointer[any]</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>readonly 包含两个参数： readOnly 只读 read 的 map，amended 标识 read map 中的 key-entry 对是否存在缺失<br>entry map 中的 value，封装一个 atomic.Pointer 指向 value 的指针，有三种状态：</p>
+<ol>
+<li>指向实际的值</li>
+<li>删除操作第一阶段会将 p 原子地设为 nil</li>
+<li>在 Dirty map 重新构建或清理时，nil 状态会进一步转化为 expunged</li>
+</ol>
+<h2 id="Load-读数据"><a href="#Load-读数据" class="headerlink" title="Load 读数据"></a>Load 读数据</h2><p><strong>map.Load(key any)</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *Map)</span></span> Load(key any) (value any, ok <span class="type">bool</span>) &#123;</span><br><span class="line">	read := m.loadReadOnly()</span><br><span class="line">	e, ok := read.m[key]</span><br><span class="line">	<span class="keyword">if</span> !ok &amp;&amp; read.amended &#123;</span><br><span class="line">		m.mu.Lock()</span><br><span class="line">		read = m.loadReadOnly()</span><br><span class="line">		e, ok = read.m[key]</span><br><span class="line">		<span class="keyword">if</span> !ok &amp;&amp; read.amended &#123;</span><br><span class="line">			e, ok = m.dirty[key]</span><br><span class="line">			m.missLocked()</span><br><span class="line">		&#125;</span><br><span class="line">		m.mu.Unlock()</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> !ok &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, <span class="literal">false</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> e.load()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>从 sync.map 中读取 value 的方法：</p>
+<ol>
+<li>首先调用 loadReadOnly()原子操作读取 m.read，如果没有则初始化一个空 read 返回</li>
+<li>判断 read 中是否有 key 对应的 entry，有的话直接返回</li>
+<li>如果没有且 amended 为 false，直接返回 nil,false</li>
+<li>否则对 m 加锁，再次查询 read, 还是没有且 amended 为 true 则需要去 dirty 查询，此时 read 的未命中调用 missLocked 对 misses++</li>
+<li>解锁返回查询结果。</li>
+</ol>
+<p><strong>entry.load()</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(e *entry)</span></span> load() (value any, ok <span class="type">bool</span>) &#123;</span><br><span class="line">	p := e.p.Load()</span><br><span class="line">	<span class="keyword">if</span> p == <span class="literal">nil</span> || p == expunged &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, <span class="literal">false</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> *p, <span class="literal">true</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>读操作中在前面取到 key 对应的 entry 后，需要对 entry 封装 p 进行原子加载</p>
+<ol>
+<li>p &#x3D;&#x3D; nil || p &#x3D;&#x3D; expunged 则代表，key 已经被删除返回 nil</li>
+<li>否则读 p 指针内容，并且转为 any 的形式进行返回.</li>
+</ol>
+<p><strong>map.missLocked()</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *Map)</span></span> missLocked() &#123;</span><br><span class="line">	m.misses++</span><br><span class="line">	<span class="keyword">if</span> m.misses &lt; <span class="built_in">len</span>(m.dirty) &#123;</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	m.read.Store(&amp;readOnly&#123;m: m.dirty&#125;)</span><br><span class="line">	m.dirty = <span class="literal">nil</span></span><br><span class="line">	m.misses = <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>当需要 dirty 兜底时则会调用该方法，会对 misses 进行++，并且在需要时将 dirty 提升为 read，并将 dirty 置为 nil 和 misses 清零</p>
+<h2 id="Store-写数据"><a href="#Store-写数据" class="headerlink" title="Store 写数据"></a>Store 写数据</h2><p><strong>map.Store(key, value any)</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *Map)</span></span> Store(key, value any) &#123;</span><br><span class="line">	_, _ = m.Swap(key, value)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>做了对 Swap 的封装调用，主要看 Swap 的实现</p>
+<p><strong>map.Swap(key, value any)</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *Map)</span></span> Swap(key, value any) (previous any, loaded <span class="type">bool</span>) &#123;</span><br><span class="line">	read := m.loadReadOnly()</span><br><span class="line">	<span class="keyword">if</span> e, ok := read.m[key]; ok &#123;</span><br><span class="line">		<span class="keyword">if</span> v, ok := e.trySwap(&amp;value); ok &#123;</span><br><span class="line">			<span class="keyword">if</span> v == <span class="literal">nil</span> &#123;</span><br><span class="line">				<span class="keyword">return</span> <span class="literal">nil</span>, <span class="literal">false</span></span><br><span class="line">			&#125;</span><br><span class="line">			<span class="keyword">return</span> *v, <span class="literal">true</span></span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	m.mu.Lock()</span><br><span class="line">	read = m.loadReadOnly()</span><br><span class="line">	<span class="keyword">if</span> e, ok := read.m[key]; ok &#123;</span><br><span class="line">		<span class="keyword">if</span> e.unexpungeLocked() &#123;</span><br><span class="line">			m.dirty[key] = e</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">if</span> v := e.swapLocked(&amp;value); v != <span class="literal">nil</span> &#123;</span><br><span class="line">			loaded = <span class="literal">true</span></span><br><span class="line">			previous = *v</span><br><span class="line">		&#125;</span><br><span class="line">	&#125; <span class="keyword">else</span> <span class="keyword">if</span> e, ok := m.dirty[key]; ok &#123;</span><br><span class="line">		<span class="keyword">if</span> v := e.swapLocked(&amp;value); v != <span class="literal">nil</span> &#123;</span><br><span class="line">			loaded = <span class="literal">true</span></span><br><span class="line">			previous = *v</span><br><span class="line">		&#125;</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		<span class="keyword">if</span> !read.amended &#123;</span><br><span class="line">			m.dirtyLocked()</span><br><span class="line">			m.read.Store(&amp;readOnly&#123;m: read.m, amended: <span class="literal">true</span>&#125;)</span><br><span class="line">		&#125;</span><br><span class="line">		m.dirty[key] = newEntry(value)</span><br><span class="line">	&#125;</span><br><span class="line">	m.mu.Unlock()</span><br><span class="line">	<span class="keyword">return</span> previous, loaded</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ol>
+<li>如果 read 中有对应的 key 存在，就进入 trySwap 判断，在 trySwap 函数里，会判断现在 entry.p 是否是 expunged ，如果不是则直接基于 CAS 操作进行 entry 值的更新，然后返回</li>
+<li>若前面没有更新，则对 m 进行加锁，进行二次判断 read 中是否存在对应 key</li>
+<li>存在的话，首先调用 unexpungeLocked 原子操作判断 entry.p 不是 expunged 返回 false 则直接原子更新 entry 为新值；如果 entry.p 是 expunged 则将 entry.p 置为 nil 返回 true 补齐 drity 的 key-entry ，然后原子更新值</li>
+<li>如果 read 中不存在对应的 key 且 dirty 中存在对应的 key 则直接原子更新 dirty 的 entry 为新值</li>
+<li>如果 read 和 dirty 中都不存在 key-entry，1. read.amended 为 false 则调用 dirtyLocked() ，在 dirtyLocked()中如果 dirty 为 nil 则会创建一个 dirty 并将 read 中没被删除的 key-entry 循环赋值给 dirty，如果 dirty 不为 nil 直接返回，然后更新 read.amended 为 true；2. 如果 read.amended 为 true 则直接给 dirty 赋值</li>
+<li>解锁返回</li>
+</ol>
+<p>*<em>entry.trySwap(i <em>any)</em></em></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(e *entry)</span></span> trySwap(i *any) (*any, <span class="type">bool</span>) &#123;</span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		p := e.p.Load()</span><br><span class="line">		<span class="keyword">if</span> p == expunged &#123;</span><br><span class="line">			<span class="keyword">return</span> <span class="literal">nil</span>, <span class="literal">false</span></span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">if</span> e.p.CompareAndSwap(p, i) &#123;</span><br><span class="line">			<span class="keyword">return</span> p, <span class="literal">true</span></span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>写操作中根据传进来的 entry 执行不同操作 entry.p 为 expunged 此时 entry.p 已经被删除，直接返回 false，否则原子 cas 操作更新 entry.p 的值</p>
+<p><strong>entry.unexpungeLocked()</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(e *entry)</span></span> unexpungeLocked() (wasExpunged <span class="type">bool</span>) &#123;</span><br><span class="line">	<span class="keyword">return</span> e.p.CompareAndSwap(expunged, <span class="literal">nil</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>写操作中如果 entry.p 为 expunged 则 cas 更新为 nil 并返回 true ，否则返回 false</p>
+<p>*<em>entry.swapLocked(i <em>any)</em></em></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(e *entry)</span></span> swapLocked(i *any) *any &#123;</span><br><span class="line">	<span class="keyword">return</span> e.p.Swap(i)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>写操作中如果 read map 或者 dirty map 存在对应 key-entry，最终会通过原子操作更新 entry.p 。</p>
+<p><strong>m.dirtyLocked()</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *Map)</span></span> dirtyLocked() &#123;</span><br><span class="line">	<span class="keyword">if</span> m.dirty != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	read := m.loadReadOnly()</span><br><span class="line">	m.dirty = <span class="built_in">make</span>(<span class="keyword">map</span>[any]*entry, <span class="built_in">len</span>(read.m))</span><br><span class="line">	<span class="keyword">for</span> k, e := <span class="keyword">range</span> read.m &#123;</span><br><span class="line">		<span class="keyword">if</span> !e.tryExpungeLocked() &#123;</span><br><span class="line">			m.dirty[k] = e</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>写操作中，如果需要对 dirty 插入数据且此时 amended 为 false，首先判断 dirty 是否为 nil</p>
+<ol>
+<li>不为 nil，直接返回</li>
+<li>drity 为 nil 未初始化，创建一个新的 dirty，然后遍历 read map，此时会判断 value 是否被删除，只有不被删除的才会讲 key-entry 加入到 dirty</li>
+</ol>
+<p><strong>entry.tryExpungeLocked()</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(e *entry)</span></span> tryExpungeLocked() (isExpunged <span class="type">bool</span>) &#123;</span><br><span class="line">	p := e.p.Load()</span><br><span class="line">	<span class="keyword">for</span> p == <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">if</span> e.p.CompareAndSwap(<span class="literal">nil</span>, expunged) &#123;</span><br><span class="line">			<span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">		&#125;</span><br><span class="line">		p = e.p.Load()</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> p == expunged</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在写流程中，如果需要将 read map 复制给 dirty 则执行该函数</p>
+<ol>
+<li>如果 entry.p 为 nil 则原子操作改为 expunged</li>
+<li>返回 p &#x3D;&#x3D; expunged</li>
+</ol>
+<h2 id="Delete-删除数据"><a href="#Delete-删除数据" class="headerlink" title="Delete 删除数据"></a>Delete 删除数据</h2><p><strong>m.Delete(key any)</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *Map)</span></span> Delete(key any) &#123;</span><br><span class="line">	m.LoadAndDelete(key)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>封装了对 LoadAndDelete 调用，主要看 LoadAndDelete 的实现</p>
+<p><strong>m.LoadAndDelete(key any)</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *Map)</span></span> LoadAndDelete(key any) (value any, loaded <span class="type">bool</span>) &#123;</span><br><span class="line">	read := m.loadReadOnly()</span><br><span class="line">	e, ok := read.m[key]</span><br><span class="line">	<span class="keyword">if</span> !ok &amp;&amp; read.amended &#123;</span><br><span class="line">		m.mu.Lock()</span><br><span class="line">		read = m.loadReadOnly()</span><br><span class="line">		e, ok = read.m[key]</span><br><span class="line">		<span class="keyword">if</span> !ok &amp;&amp; read.amended &#123;</span><br><span class="line">			e, ok = m.dirty[key]</span><br><span class="line">			<span class="built_in">delete</span>(m.dirty, key)</span><br><span class="line">			m.missLocked()</span><br><span class="line">		&#125;</span><br><span class="line">		m.mu.Unlock()</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> ok &#123;</span><br><span class="line">		<span class="keyword">return</span> e.<span class="built_in">delete</span>()</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span>, <span class="literal">false</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ol>
+<li>首先读取 read map，如果 read map 存在对应得 key-entry 直接调用 e.delete 返回</li>
+<li>如果 read map 不存在对应得 key-entry 且 amended 为 false，直接返回</li>
+<li>如果 amended 为 true 则加锁，二次检查 read map，如果 read map 此时存在对应 key-entry 则解锁，调用 e.delete 返回</li>
+<li>read map 二次检查仍不存在对应 key 且 amended 为 true，尝试从 dirty map 删除对应得 key-entry，此时需要 dirty 兜底会执行 missLocked，解锁，根据 ok 得值决定后续操作</li>
+</ol>
+<p><strong>entry.delete()</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(e *entry)</span></span> <span class="built_in">delete</span>() (value any, ok <span class="type">bool</span>) &#123;</span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		p := e.p.Load()</span><br><span class="line">		<span class="keyword">if</span> p == <span class="literal">nil</span> || p == expunged &#123;</span><br><span class="line">			<span class="keyword">return</span> <span class="literal">nil</span>, <span class="literal">false</span></span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">if</span> e.p.CompareAndSwap(p, <span class="literal">nil</span>) &#123;</span><br><span class="line">			<span class="keyword">return</span> *p, <span class="literal">true</span></span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在删除流程中，如果 read map 或 dirty map 中存在对应得 key，则调用 delete()，根据 entry.p 得值执行不同操作</p>
+<ol>
+<li>p &#x3D;&#x3D; nil || p &#x3D;&#x3D; expunged，说明 entry 已经处于删除态，直接返回</li>
+<li>否则将 p 通过 cas 操作赋值为 nil</li>
+</ol>
+<h2 id="遍历数据"><a href="#遍历数据" class="headerlink" title="遍历数据"></a>遍历数据</h2><p><strong>m.Range(f func(key, value any) bool)</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *Map)</span></span> Range(f <span class="function"><span class="keyword">func</span><span class="params">(key, value any)</span></span> <span class="type">bool</span>) &#123;</span><br><span class="line">	read := m.loadReadOnly()</span><br><span class="line">	<span class="keyword">if</span> read.amended &#123;</span><br><span class="line">		m.mu.Lock()</span><br><span class="line">		read = m.loadReadOnly()</span><br><span class="line">		<span class="keyword">if</span> read.amended &#123;</span><br><span class="line">			read = readOnly&#123;m: m.dirty&#125;</span><br><span class="line">			copyRead := read</span><br><span class="line">			m.read.Store(&amp;copyRead)</span><br><span class="line">			m.dirty = <span class="literal">nil</span></span><br><span class="line">			m.misses = <span class="number">0</span></span><br><span class="line">		&#125;</span><br><span class="line">		m.mu.Unlock()</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">for</span> k, e := <span class="keyword">range</span> read.m &#123;</span><br><span class="line">		v, ok := e.load()</span><br><span class="line">		<span class="keyword">if</span> !ok &#123;</span><br><span class="line">			<span class="keyword">continue</span></span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">if</span> !f(k, v) &#123;</span><br><span class="line">			<span class="keyword">break</span></span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>遍历流程，如果 amended 为 true，read map 缺数据则加锁将 dirty map 赋值给 read map，并清空 misses，<br>接着 for 循环遍历 read map 取值，如果 value 在执行用户传入的回调函数时为 false 则结束遍历</p>
+<h2 id="RWMtex-map-支持并发安全的-map-demo"><a href="#RWMtex-map-支持并发安全的-map-demo" class="headerlink" title="RWMtex + map 支持并发安全的 map demo"></a>RWMtex + map 支持并发安全的 map demo</h2><p>代码篇幅较长，附上我的仓库连接，麻烦点击连接查看：<br><a target="_blank" rel="noopener" href="https://github.com/Wsp030914/RWMap">https://github.com/Wsp030914/RWMap</a></p>
+<p>谢谢阅读！</p>
+</article>
+<div class="article-footer">
+    <section id="license">
+      <div class="header"><span>许可协议</span></div>
+      <div class="body"><p>本文采用 <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/">署名-非商业性使用-相同方式共享 4.0 国际</a> 许可协议，转载请注明出处。</p>
+</div>
+    </section>
+    
+
+</div>
+
+<div class="related-wrap" id="read-next"><section class="body"><div class="item" id="prev"></div><div class="item" id="next"><div class="note">较早文章</div><a href="/2026/01/30/channel%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/">channel 源码浅读</a></div></section></div>
+
+
+
+
+
+
+<footer class="page-footer footnote"><hr><div class="text"><p>本站由 <a href="/">jz</a> 使用 <a target="_blank" rel="noopener" href="https://github.com/xaoxuu/hexo-theme-stellar/tree/1.33.1">Stellar 1.33.1</a> 主题创建。<br>本博客所有文章除特别声明外，均采用 <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a> 许可协议，转载请注明出处。</p>
+</div></footer>
+<div class="main-mask" onclick="sidebar.dismiss()"></div></div><aside class="l_right">
+<div class="widgets">
+
+<widget class="widget-wrapper toc" id="data-toc" collapse="false"><div class="widget-header dis-select"><span class="name">本文目录</span><a class="cap-action" onclick="sidebar.toggleTOC()" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6h11m-11 6h11m-11 6h11M4 6h1v4m-1 0h2m0 8H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg></a></div><div class="widget-body"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#sync-map"><span class="toc-text">sync.map</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-text">使用场景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="toc-text">数据结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Load-%E8%AF%BB%E6%95%B0%E6%8D%AE"><span class="toc-text">Load 读数据</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Store-%E5%86%99%E6%95%B0%E6%8D%AE"><span class="toc-text">Store 写数据</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Delete-%E5%88%A0%E9%99%A4%E6%95%B0%E6%8D%AE"><span class="toc-text">Delete 删除数据</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%81%8D%E5%8E%86%E6%95%B0%E6%8D%AE"><span class="toc-text">遍历数据</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RWMtex-map-%E6%94%AF%E6%8C%81%E5%B9%B6%E5%8F%91%E5%AE%89%E5%85%A8%E7%9A%84-map-demo"><span class="toc-text">RWMtex + map 支持并发安全的 map demo</span></a></li></ol></li></ol></div><div class="widget-footer"><a class="top" onclick="util.scrollTop()"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Solar by 480 Design - https://creativecommons.org/licenses/by/4.0/ --><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><path stroke-linejoin="round" d="m9 15.5l3-3l3 3m-6-4l3-3l3 3"/><path d="M7 3.338A9.95 9.95 0 0 1 12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12c0-1.821.487-3.53 1.338-5"/></g></svg><span>回到顶部</span></a></div></widget>
+</div></aside><div class='float-panel'>
+  <button type='button' style='display:none' class='laptop-only rightbar-toggle mobile' onclick='sidebar.rightbar()'>
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6h11m-11 6h11m-11 6h11M4 6h1v4m-1 0h2m0 8H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
+  </button>
+  <button type='button' style='display:none' class='mobile-only leftbar-toggle mobile' onclick='sidebar.leftbar()'>
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 11c0-3.771 0-5.657 1.172-6.828C4.343 3 6.229 3 10 3h4c3.771 0 5.657 0 6.828 1.172C22 5.343 22 7.229 22 11v2c0 3.771 0 5.657-1.172 6.828C19.657 21 17.771 21 14 21h-4c-3.771 0-5.657 0-6.828-1.172C2 18.657 2 16.771 2 13z"/><path id="sep" stroke-linecap="round" d="M5.5 10h6m-5 4h4m4.5 7V3"/></g></svg>
+  </button>
+</div>
+</div><div class="scripts">
+
+
+<script type="text/javascript">
+  window.canonical = {"closeEnable":true,"closeText":"关闭提示","originalHost":null,"officialHosts":["localhost"],"encoded":""};
+  window.canonical["param"] = {"permalink":"https://wsp030914.github.io/2026/01/31/sync-map%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/","checklink":"/js/plugins/video.js"};
+  const ctx = {
+    date_suffix: {
+      just: `刚刚`,
+      min: `分钟前`,
+      hour: `小时前`,
+      day: `天前`,
+    },
+    root : `/`,
+    tag_plugins: {
+      chat: Object.assign({"api":"https://siteinfo.listentothewind.cn/api/v1"}),
+    }
+  };
+
+  // required plugins (only load if needs)
+  if (`local_search`) {
+    ctx.search = {};
+    ctx.search.service = `local_search`;
+    if (ctx.search.service == 'local_search') {
+      let service_obj = Object.assign({}, `{"field":"all","path":"/search.json","content":true,"skip_search":null,"sort":"-date"}`);
+      ctx.search[ctx.search.service] = service_obj;
+    }
+  }
+  const def = {
+    avatar: `https://gcore.jsdelivr.net/gh/cdn-x/placeholder@1.0.12/avatar/round/3442075.svg`,
+    cover: `https://gcore.jsdelivr.net/gh/cdn-x/placeholder@1.0.12/cover/76b86c0226ffd.svg`,
+    loading: `https://api.iconify.design/eos-icons:three-dots-loading.svg?color=%231cd0fd`,
+  };
+  const deps = {
+    jquery: `https://gcore.jsdelivr.net/npm/jquery@3.7/dist/jquery.min.js`,
+    marked: `https://gcore.jsdelivr.net/npm/marked@13.0/lib/marked.umd.min.js`,
+    lazyload: `/%5Bobject%20Object%5D`
+  }
+  
+
+</script>
+
+<script type="text/javascript">
+  
+  function RunItem() {
+    this.list = []; // 存放回调函数
+    this.start = () => {
+      for (var i = 0; i < this.list.length; i++) {
+        this.list[i].run();
+      }
+    };
+    this.push = (fn, name, setRequestAnimationFrame = true) => {
+      let myfn = fn
+      if (setRequestAnimationFrame) {
+        myfn = () => {
+          utils.requestAnimationFrame(fn)
+        }
+      }
+      var f = new Item(myfn, name);
+      this.list.push(f);
+    };
+    this.remove = (name) => {
+      for (let index = 0; index < this.list.length; index++) {
+        const e = this.list[index];
+        if (e.name == name) {
+          this.list.splice(index, 1);
+        }
+      }
+    }
+    // 构造一个可以run的对象
+    function Item(fn, name) {
+      // 函数名称
+      this.name = name || fn.name;
+      // run方法
+      this.run = () => {
+        try {
+          fn()
+        } catch (error) {
+          console.log(error);
+        }
+      };
+    }
+  }
+
+  const utils = {
+    // 懒加载 css https://github.com/filamentgroup/loadCSS
+    css: (href, before, media, attributes) => {
+      var doc = window.document;
+      var ss = doc.createElement("link");
+      var ref;
+      if (before) {
+        ref = before;
+      } else {
+        var refs = (doc.body || doc.getElementsByTagName("head")[0]).childNodes;
+        ref = refs[refs.length - 1];
+      }
+      var sheets = doc.styleSheets;
+      if (attributes) {
+        for (var attributeName in attributes) {
+          if (attributes.hasOwnProperty(attributeName)) {
+            ss.setAttribute(attributeName, attributes[attributeName]);
+          }
+        }
+      }
+      ss.rel = "stylesheet";
+      ss.href = href;
+      ss.media = "only x";
+      function ready(cb) {
+        if (doc.body) {
+          return cb();
+        }
+        setTimeout(function () {
+          ready(cb);
+        });
+      }
+      ready(function () {
+        ref.parentNode.insertBefore(ss, before ? ref : ref.nextSibling);
+      });
+      var onloadcssdefined = function (cb) {
+        var resolvedHref = ss.href;
+        var i = sheets.length;
+        while (i--) {
+          if (sheets[i].href === resolvedHref) {
+            return cb();
+          }
+        }
+        setTimeout(function () {
+          onloadcssdefined(cb);
+        });
+      };
+      function loadCB() {
+        if (ss.addEventListener) {
+          ss.removeEventListener("load", loadCB);
+        }
+        ss.media = media || "all";
+      }
+      if (ss.addEventListener) {
+        ss.addEventListener("load", loadCB);
+      }
+      ss.onloadcssdefined = onloadcssdefined;
+      onloadcssdefined(loadCB);
+      return ss;
+    },
+
+    js: (src, opt) => new Promise((resolve, reject) => {
+      var script = document.createElement('script');
+      if (src.startsWith('/')) {
+        src = ctx.root + src.substring(1);
+      }
+      script.src = src;
+      if (opt) {
+        for (let key of Object.keys(opt)) {
+          script[key] = opt[key]
+        }
+      } else {
+        // 默认异步，如果需要同步，第二个参数传入 {} 即可
+        script.async = true
+      }
+      script.onerror = reject
+      script.onload = script.onreadystatechange = function () {
+        const loadState = this.readyState
+        if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+        script.onload = script.onreadystatechange = null
+        resolve()
+      }
+      document.head.appendChild(script)
+    }),
+
+    jq: (fn) => {
+      if (typeof jQuery === 'undefined') {
+        utils.js(deps.jquery).then(fn)
+      } else {
+        fn()
+      }
+    },
+
+    onLoading: (el) => {
+      if (el) {
+        if ($(el).find('.loading-wrap').length == 0){
+          $(el).append('<div class="loading-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="2em" height="2em" preserveAspectRatio="xMidYMid meet" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"><path stroke-dasharray="60" stroke-dashoffset="60" stroke-opacity=".3" d="M12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3Z"><animate fill="freeze" attributeName="stroke-dashoffset" dur="1.3s" values="60;0"/></path><path stroke-dasharray="15" stroke-dashoffset="15" d="M12 3C16.9706 3 21 7.02944 21 12"><animate fill="freeze" attributeName="stroke-dashoffset" dur="0.3s" values="15;0"/><animateTransform attributeName="transform" dur="1.5s" repeatCount="indefinite" type="rotate" values="0 12 12;360 12 12"/></path></g></svg></div>');
+        }
+      }
+    },
+    onLoadSuccess: (el) => {
+      if (el) {
+        $(el).find('.loading-wrap').remove();
+      }
+    },
+    onLoadFailure: (el) => {
+      if (el) {
+        $(el).find('.loading-wrap svg').remove();
+        $(el).find('.loading-wrap').append('<svg xmlns="http://www.w3.org/2000/svg" width="2em" height="2em" preserveAspectRatio="xMidYMid meet" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path stroke-dasharray="60" stroke-dashoffset="60" d="M12 3L21 20H3L12 3Z"><animate fill="freeze" attributeName="stroke-dashoffset" dur="0.5s" values="60;0"/></path><path stroke-dasharray="6" stroke-dashoffset="6" d="M12 10V14"><animate fill="freeze" attributeName="stroke-dashoffset" begin="0.6s" dur="0.2s" values="6;0"/></path></g><circle cx="12" cy="17" r="1" fill="currentColor" fill-opacity="0"><animate fill="freeze" attributeName="fill-opacity" begin="0.8s" dur="0.4s" values="0;1"/></circle></svg>');
+        $(el).find('.loading-wrap').addClass('error');
+      }
+    },
+    request: (el, url, callback, onFailure) => {
+      const maxRetry = 3;
+      let retryCount = 0;
+
+      return new Promise((resolve, reject) => {
+        const load = () => {
+          utils.onLoading?.(el);
+
+          let timedOut = false;
+          const timeout = setTimeout(() => {
+            timedOut = true;
+            console.warn('[request] 超时:', url);
+
+            if (++retryCount >= maxRetry) {
+              utils.onLoadFailure?.(el);
+              onFailure?.();
+              reject('请求超时');
+            } else {
+              setTimeout(load, 1000);
+            }
+          }, 5000);
+
+          fetch(url).then(resp => {
+            if (timedOut) return;
+            clearTimeout(timeout);
+
+            if (!resp.ok) throw new Error('响应失败');
+            return resp;
+          }).then(data => {
+            if (timedOut) return;
+            utils.onLoadSuccess?.(el);
+            callback(data);
+            resolve(data);
+          }).catch(err => {
+            clearTimeout(timeout);
+            console.warn('[request] 错误:', err);
+
+            if (++retryCount >= maxRetry) {
+              utils.onLoadFailure?.(el);
+              onFailure?.();
+              reject(err);
+            } else {
+              setTimeout(load, 1000);
+            }
+          });
+        };
+
+        load();
+      });
+    },
+    requestWithoutLoading: (url, options = {}, maxRetry = 2, timeout = 5000) => {
+      return new Promise((resolve, reject) => {
+        let retryCount = 0;
+
+        const tryRequest = () => {
+          let timedOut = false;
+          const timer = setTimeout(() => {
+            timedOut = true;
+            if (++retryCount > maxRetry) reject('timeout');
+            else tryRequest();
+          }, timeout);
+
+          fetch(url, options)
+            .then(resp => {
+              clearTimeout(timer);
+              if (!resp.ok) throw new Error('bad response');
+              resolve(resp);
+            })
+            .catch(err => {
+              clearTimeout(timer);
+              if (++retryCount > maxRetry) reject(err);
+              else setTimeout(tryRequest, 500);
+            });
+        };
+
+        tryRequest();
+      });
+    },
+    /********************** requestAnimationFrame ********************************/
+    // 1、requestAnimationFrame 会把每一帧中的所有 DOM 操作集中起来，在一次重绘或回流中就完成，并且重绘或回流的时间间隔紧紧跟随浏览器的刷新频率，一般来说，这个频率为每秒60帧。
+    // 2、在隐藏或不可见的元素中，requestAnimationFrame 将不会进行重绘或回流，这当然就意味着更少的的 cpu，gpu 和内存使用量。
+    requestAnimationFrame: (fn) => {
+      if (!window.requestAnimationFrame) {
+        window.requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame || window.webkitRequestAnimationFrame;
+      }
+      window.requestAnimationFrame(fn)
+    },
+    dark: {},
+  };
+
+  // utils.dark.mode 当前模式 dark or light
+  // utils.dark.toggle() 暗黑模式触发器
+  // utils.dark.push(callBack[,"callBackName"]) 传入触发器回调函数
+  utils.dark.method = {
+    toggle: new RunItem(),
+  };
+  utils.dark = Object.assign(utils.dark, {
+    push: utils.dark.method.toggle.push,
+  });
+</script>
+<script>
+  const sidebar = {
+    leftbar: () => {
+      if (l_body) {
+        l_body.toggleAttribute('leftbar');
+        l_body.removeAttribute('rightbar');
+      }
+    },
+    rightbar: () => {
+      if (l_body) {
+        l_body.toggleAttribute('rightbar');
+        l_body.removeAttribute('leftbar');
+      }
+    },
+    dismiss: () => {
+      if (l_body) {
+        l_body.removeAttribute('leftbar');
+        l_body.removeAttribute('rightbar');
+      }
+    },
+    toggleTOC: () => {
+      document.querySelector('#data-toc').classList.toggle('collapse');
+    }
+  }
+</script>
+<script type="text/javascript">
+  (() => {
+    const tagSwitchers = document.querySelectorAll('.tag-subtree.parent-tag > a > .tag-switcher-wrapper')
+    for (const tagSwitcher of tagSwitchers) {
+      tagSwitcher.addEventListener('click', (e) => {
+        const parent = e.target.closest('.tag-subtree.parent-tag')
+        parent.classList.toggle('expanded')
+        e.preventDefault()
+      })
+    }
+
+    // Get active tag from query string, then activate it.
+    const urlParams = new URLSearchParams(window.location.search)
+    const activeTag = urlParams.get('tag')
+    if (activeTag) {
+      let tag = document.querySelector(`.tag-subtree[data-tag="${activeTag}"]`)
+      if (tag) {
+        tag.querySelector('a').classList.add('active')
+        
+        while (tag) {
+          tag.classList.add('expanded')
+          tag = tag.parentElement.closest('.tag-subtree.parent-tag')
+        }
+      }
+    }
+  })()
+</script>
+
+<script async src="https://gcore.jsdelivr.net/npm/vanilla-lazyload@19.1/dist/lazyload.min.js"></script>
+<script>
+  // https://www.npmjs.com/package/vanilla-lazyload
+  // Set the options globally
+  // to make LazyLoad self-initialize
+  window.lazyLoadOptions = {
+    elements_selector: ".lazy",
+    callback_loaded: (el) => {
+      el.classList.add('loaded');
+      const wrapper = el.closest('.lazy-box');
+      const icon = wrapper?.querySelector('.lazy-icon');
+      if (icon) icon.remove();
+    }
+  };
+  // Listen to the initialization event
+  // and get the instance of LazyLoad
+  window.addEventListener(
+    "LazyLoad::Initialized",
+    function (event) {
+      window.lazyLoadInstance = event.detail.instance;
+    },
+    false
+  );
+  document.addEventListener('DOMContentLoaded', function () {
+    window.lazyLoadInstance?.update();
+  });
+
+  window.wrapLazyloadImages = (container) => {
+    if (typeof container === 'string') {
+      container = document.querySelector(container);
+    }
+    if (!container) return;
+    
+    const images = container.querySelectorAll('img');
+    images.forEach((img) => {
+      if (img.classList.contains('lazy')) return;
+
+      const src = img.getAttribute('src');
+      if (!src) return;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'lazy-box';
+
+      const newImg = img.cloneNode();
+      newImg.removeAttribute('src');
+      newImg.setAttribute('data-src', src);
+      newImg.classList.add('lazy');
+
+      const icon = document.createElement('div');
+      icon.className = 'lazy-icon';
+      if (def.loading) {
+        icon.style.backgroundImage = `url("${def.loading}")`;
+      }
+
+      wrapper.appendChild(newImg);
+      wrapper.appendChild(icon);
+
+      img.replaceWith(wrapper);
+    });
+
+    // 通知 LazyLoad 更新
+    if (window.lazyLoadInstance?.update) {
+      window.lazyLoadInstance.update();
+    }
+  }
+  
+</script>
+
+<!-- required -->
+<script src="/js/main.js?v=1.33.1" defer></script>
+
+<script type="text/javascript">
+  const applyTheme = (theme) => {
+    if (theme === 'auto') {
+      document.documentElement.removeAttribute('data-theme')
+    } else {
+      document.documentElement.setAttribute('data-theme', theme)
+    }
+
+    // applyThemeToGiscus(theme)
+  }
+
+  // FIXME: 这会导致无法使用 preferred_color_scheme 以外的主题
+  const applyThemeToGiscus = (theme) => {
+    // theme = theme === 'auto' ? 'preferred_color_scheme' : theme
+    const cmt = document.getElementById('giscus')
+    if (cmt) {
+      // This works before giscus load.
+      cmt.setAttribute('data-theme', theme)
+    }
+
+    const iframe = document.querySelector('#comments > section.giscus > iframe')
+    if (iframe) {
+      // This works after giscus loaded.
+      const src = iframe.src
+      const newSrc = src.replace(/theme=[\w]+/, `theme=${theme}`)
+      iframe.src = newSrc
+    }
+  }
+
+  const switchTheme = () => {
+    // light -> dark -> auto -> light -> ...
+    const currentTheme = document.documentElement.getAttribute('data-theme')
+    let newTheme;
+    switch (currentTheme) {
+      case 'light':
+        newTheme = 'dark'
+        break
+      case 'dark':
+        newTheme = 'auto'
+        break
+      default:
+        newTheme = 'light'
+    }
+    applyTheme(newTheme)
+    window.localStorage.setItem('Stellar.theme', newTheme)
+    utils.dark.mode = newTheme === 'auto' ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : newTheme;
+    utils.dark.method.toggle.start();
+
+    const messages = {
+      light: `切换到浅色模式`,
+      dark: `切换到深色模式`,
+      auto: `切换到跟随系统配色`,
+    }
+    hud?.toast?.(messages[newTheme])
+  }
+
+  (() => {
+    // Apply user's preferred theme, if any.
+    const theme = window.localStorage.getItem('Stellar.theme')
+    if (theme !== null) {
+      applyTheme(theme)
+    } else {
+      utils.dark.mode = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    utils.dark.method.toggle.start();
+  })()
+</script>
+
+
+<!-- optional -->
+
+
+
+<script defer>
+  window.addEventListener('DOMContentLoaded', (event) => {
+    ctx.services = Object.assign({}, JSON.parse(`{"mdrender":{"js":"/js/services/mdrender.js"},"siteinfo":{"js":"/js/services/siteinfo.js","api":null},"ghinfo":{"js":"/js/services/ghinfo.js"},"rating":{"js":"/js/services/rating.js","api":"https://star-vote.xaox.cc/api/rating"},"vote":{"js":"/js/services/vote.js","api":"https://star-vote.xaox.cc/api/vote"},"sites":{"js":"/js/services/sites.js"},"friends":{"js":"/js/services/friends.js"},"friends_and_posts":{"js":"/js/services/friends_and_posts.js"},"timeline":{"js":"/js/services/timeline.js"},"fcircle":{"js":"/js/services/fcircle.js"},"weibo":{"js":"/js/services/weibo.js"},"memos":{"js":"/js/services/memos.js"},"voice":{"js":"/js/plugins/voice.js"},"video":{"js":"/js/plugins/video.js"},"download-file":{"js":"/js/plugins/download-file.js"},"twikoo":{"js":"/js/services/twikoo_latest_comment.js"},"waline":{"js":"/js/services/waline_latest_comment.js"},"artalk":{"js":"/js/services/artalk_latest_comment.js"},"giscus":{"js":"/js/services/giscus_latest_comment.js"},"contributors":{"edit_this_page":{"_posts/":null,"wiki/stellar/":"https://github.com/xaoxuu/hexo-theme-stellar-docs/blob/main/"},"js":"/js/services/contributors.js"},"rss":{"js":"/js/services/rss.js"}}`));
+    for (let id of Object.keys(ctx.services)) {
+      const js = ctx.services[id].js;
+      if (id == 'siteinfo') {
+        ctx.cardlinks = document.querySelectorAll('a.link-card[cardlink]');
+        if (ctx.cardlinks?.length > 0) {
+          utils.js(js, { defer: true }).then(function () {
+            setCardLink(ctx.cardlinks);
+          });
+        }
+      } else if (id == 'voice') {
+        ctx.voiceAudios = document.querySelectorAll('.voice>audio');
+        if (ctx.voiceAudios?.length > 0) {
+          utils.js(js, { defer: true }).then(function () {
+            createVoiceDom(ctx.voiceAudios);
+          });
+        }
+      } else if (id == 'video') {
+        ctx.videos = document.querySelectorAll('.video>video');
+        if (ctx.videos?.length > 0) {
+          utils.js(js, { defer: true }).then(function () {
+            videoEvents(ctx.videos);
+          });
+        }
+      } else if (id == 'download-file') {
+        ctx.files = document.querySelectorAll('.chat-file');
+        if (ctx.files?.length > 0) {
+          utils.js(js, { defer: true }).then(function () {
+            downloadFileEvent(ctx.files);
+          });
+        }
+      } else {
+        const els = document.getElementsByClassName(`ds-${id}`);
+        if (els?.length > 0) {
+          utils.jq(() => {
+            if (id == 'timeline' || 'memos' || 'marked') {
+              utils.js(deps.marked).then(function () {
+                utils.js(js, { defer: true });
+              });
+            } else {
+              utils.js(js, { defer: true });
+            }
+          });
+        }
+      }
+    }
+
+    // chat iphone time
+    let phoneTimes = document.querySelectorAll('.chat .status-bar .time');
+
+    if (phoneTimes.length > 0) {
+      NowTime();
+      var date = new Date();
+      var sec = date.getSeconds();
+      var firstAdjustInterval = setInterval(firstAdjustTime, 1000 * (60 - sec));
+    }
+
+    function firstAdjustTime() {
+      NowTime();
+      clearInterval(firstAdjustInterval);
+      setInterval(NowTime, 1000 * 60);
+    }
+
+    function NowTime() {
+      for (let i = 0; i < phoneTimes.length; ++i) {
+        var timeSpan = phoneTimes[i];
+        var date = new Date();
+        var hour = date.getHours();
+        var min = date.getMinutes();
+        timeSpan.innerHTML = check(hour) + ":" + check(min);
+      }
+    };
+
+    function check(val) {
+      if (val < 10) {
+        return ("0" + val);
+      }
+      return (val);
+    }
+
+    // chat quote
+    const chat_quote_obverser = new IntersectionObserver((entries, observer) => {
+      entries.filter((entry) => { return entry.isIntersecting }).sort((a, b) => a.intersectionRect.y !== b.intersectionRect.y ? a.intersectionRect.y - b.intersectionRect.y : a.intersectionRect.x - b.intersectionRect.x).forEach((entry, index) => {
+          observer.unobserve(entry.target);
+          setTimeout(() => {
+            entry.target.classList.add('quote-blink');
+            setTimeout(() => {
+              entry.target.classList.remove('quote-blink');
+            }, 1000);
+          }, Math.max(100, 16) * (index + 1));
+        });
+    });
+
+    var chatQuotes = document.querySelectorAll(".chat .talk .quote");
+    chatQuotes.forEach((quote) => {
+      quote.addEventListener('click', function () {
+        var chatCellDom = document.getElementById("quote-" + quote.getAttribute("quotedCellTag"));
+        if (chatCellDom) {
+          var chatDiv = chatCellDom.parentElement;
+          var mid = chatDiv.clientHeight / 2;
+          var offsetTop = chatCellDom.offsetTop;
+          if (offsetTop > mid - chatCellDom.clientHeight / 2) {
+            chatDiv.scrollTo({
+              top: chatCellDom.offsetTop - mid + chatCellDom.clientHeight / 2,
+              behavior: "smooth"
+            });
+          } else {
+            chatDiv.scrollTo({
+              top: 0,
+              behavior: "smooth"
+            });
+          }
+          chat_quote_obverser.observe(chatCellDom);
+        }
+      });
+    });
+  });
+</script>
+
+<script>
+  window.addEventListener('DOMContentLoaded', (event) => {
+    ctx.search = {
+      path: `/search.json`,
+    }
+    utils.js('/js/search/local-search.js', { defer: true });
+  });
+</script><script>
+  window.FPConfig = {
+    delay: 0,
+    ignoreKeywords: [],
+    maxRPS: 5,
+    hoverDelay: 25
+  };
+</script>
+<script defer src="https://gcore.jsdelivr.net/npm/flying-pages@2/flying-pages.min.js"></script><script>
+  ctx.fancybox = {
+    selector: `.timenode p>img`,
+    css: `https://gcore.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.css`,
+    js: `https://gcore.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.umd.js`
+  };
+  var selector = '[data-fancybox]:not(.error), .with-fancybox .atk-content img:not([atk-emoticon])';
+  if (ctx.fancybox.selector) {
+    selector += `, ${ctx.fancybox.selector}`
+  }
+  var needFancybox = document.querySelectorAll(selector).length !== 0;
+  if (!needFancybox) {
+    const memos = document.getElementsByClassName('ds-memos');
+    if (memos != undefined && memos.length > 0) {
+      needFancybox = true;
+    }
+    const fancybox = document.getElementsByClassName('with-fancybox');
+    if (fancybox != undefined && fancybox.length > 0) {
+      needFancybox = true;
+    }
+  }
+  if (needFancybox) {
+    utils.css(ctx.fancybox.css);
+    utils.js(ctx.fancybox.js, { defer: true }).then(function () {
+      Fancybox.bind(selector, {
+        hideScrollbar: false,
+        Thumbs: {
+          autoStart: false,
+        },
+        caption: (fancybox, slide) => {
+          return slide.triggerEl.alt || slide.triggerEl.dataset.caption || null
+        }
+      });
+    })
+  }
+</script>
+<script>
+  window.addEventListener('DOMContentLoaded', (event) => {
+    const swiper_api = document.getElementById('swiper-api');
+    if (swiper_api != undefined) {
+      utils.css(`https://unpkg.com/swiper@10.3/swiper-bundle.min.css`);
+      utils.js(`https://unpkg.com/swiper@10.3/swiper-bundle.min.js`, { defer: true }).then(function () {
+        const effect = swiper_api.getAttribute('effect') || '';
+        var swiper = new Swiper('.swiper#swiper-api', {
+          slidesPerView: 'auto',
+          spaceBetween: 8,
+          centeredSlides: true,
+          effect: effect,
+          rewind: true,
+          pagination: {
+            el: '.swiper-pagination',
+            clickable: true,
+          },
+          navigation: {
+            nextEl: '.swiper-button-next',
+            prevEl: '.swiper-button-prev',
+          },
+        });
+      })
+    }
+  });
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    window.codeElements = document.querySelectorAll('.code');
+    if (window.codeElements.length > 0) {
+      ctx.copycode = {
+        default_text: `Copy`,
+        success_text: `Copied`,
+        toast: `复制成功`,
+      };
+      utils.js('/js/plugins/copycode.js');
+    }
+  });
+</script>
+
+
+<!-- inject -->
+
+</div></body></html>
