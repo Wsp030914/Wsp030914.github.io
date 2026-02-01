@@ -17,20 +17,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000">
   <meta name="theme-color" content="#f9fafb">
-  <title>channel 源码浅读 - jz blog</title>
+  <title>channel 源码浅读 - Jiaozi's blog</title>
 
   
     <meta name="description" content="channel不要通过共享内存来通信，而要通过通信来共享内存 以下是 go 1.24版本的 channel 的实现,尝试去解读 数据结构hchan 123456789101112131415type hchan struct &#123;	qcount   uint           &#x2F;&#x2F; total data in the queue	dataqsiz uint           &#x2F;&#x2F; si">
 <meta property="og:type" content="article">
 <meta property="og:title" content="channel 源码浅读">
 <meta property="og:url" content="https://wsp030914.github.io/2026/01/30/channel%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/">
-<meta property="og:site_name" content="jz blog">
+<meta property="og:site_name" content="Jiaozi&#39;s blog">
 <meta property="og:description" content="channel不要通过共享内存来通信，而要通过通信来共享内存 以下是 go 1.24版本的 channel 的实现,尝试去解读 数据结构hchan 123456789101112131415type hchan struct &#123;	qcount   uint           &#x2F;&#x2F; total data in the queue	dataqsiz uint           &#x2F;&#x2F; si">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="https://wsp030914.github.io/images/jz.jpg">
 <meta property="article:published_time" content="2026-01-30T11:52:02.000Z">
 <meta property="article:modified_time" content="2026-01-31T13:12:46.000Z">
-<meta property="article:author" content="jz">
+<meta property="article:author" content="Jiaozi">
 <meta property="article:tag" content="golang">
 <meta property="article:tag" content="并发">
 <meta property="article:tag" content="channel">
@@ -51,7 +51,7 @@
 
   
 
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"jz","sameAs":[],"image":"https://wsp030914.github.io/images/jz.jpg"},"dateCreated":"2026-01-30T19:52:02+08:00","dateModified":"2026-01-31T21:12:46+08:00","datePublished":"2026-01-30T19:52:02+08:00","description":"","headline":"channel 源码浅读","mainEntityOfPage":{"@type":"WebPage","@id":"https://wsp030914.github.io/2026/01/30/channel%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/"},"publisher":{"@type":"Organization","name":"jz","sameAs":[],"image":"https://wsp030914.github.io/images/jz.jpg","logo":{"@type":"ImageObject","url":"https://wsp030914.github.io/images/jz.jpg"}},"url":"https://wsp030914.github.io/2026/01/30/channel%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/","keywords":"golang, 并发, channel","image":[]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Jiaozi","sameAs":[],"image":"https://wsp030914.github.io/images/jz.jpg"},"dateCreated":"2026-01-30T19:52:02+08:00","dateModified":"2026-01-31T21:12:46+08:00","datePublished":"2026-01-30T19:52:02+08:00","description":"","headline":"channel 源码浅读","mainEntityOfPage":{"@type":"WebPage","@id":"https://wsp030914.github.io/2026/01/30/channel%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/"},"publisher":{"@type":"Organization","name":"Jiaozi","sameAs":[],"image":"https://wsp030914.github.io/images/jz.jpg","logo":{"@type":"ImageObject","url":"https://wsp030914.github.io/images/jz.jpg"}},"url":"https://wsp030914.github.io/2026/01/30/channel%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/","keywords":"golang, 并发, channel","image":[]}</script>
   
 </head>
 <body><div class="sitebg"><div class="siteblur"></div></div>
@@ -59,7 +59,7 @@
 <div class="l_body content" id="start" layout="post" type="tech" ><aside class="l_left"><div class="sidebg"></div><div class="leftbar-container">
 
 
-<header class="header"><div class="logo-wrap"><a class="avatar" href="/"><div class="bg" style="opacity:0;background-image:url(https://gcore.jsdelivr.net/gh/cdn-x/placeholder@1.0.12/avatar/round/rainbow64@3x.webp);"></div><img no-lazy class="avatar" src="/images/jz.jpg" onerror="javascript:this.classList.add('error');this.src='https://gcore.jsdelivr.net/gh/cdn-x/placeholder@1.0.12/image/2659360.svg';"></a><a class="title" href="/"><div class="main">jz blog</div><div class="sub cap">欢迎大家</div></a></div></header>
+<header class="header"><div class="logo-wrap"><a class="avatar" href="/"><div class="bg" style="opacity:0;background-image:url(https://gcore.jsdelivr.net/gh/cdn-x/placeholder@1.0.12/avatar/round/rainbow64@3x.webp);"></div><img no-lazy class="avatar" src="/images/jz.jpg" onerror="javascript:this.classList.add('error');this.src='https://gcore.jsdelivr.net/gh/cdn-x/placeholder@1.0.12/image/2659360.svg';"></a><a class="title" href="/"><div class="main">Jiaozi's blog</div><div class="sub cap">欢迎大家</div></a></div></header>
 
 <div class="nav-area">
 
@@ -265,7 +265,7 @@
 
 
 
-<footer class="page-footer footnote"><hr><div class="text"><p>本站由 <a href="/">jz</a> 使用 <a target="_blank" rel="noopener" href="https://github.com/xaoxuu/hexo-theme-stellar/tree/1.33.1">Stellar 1.33.1</a> 主题创建。<br>本博客所有文章除特别声明外，均采用 <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a> 许可协议，转载请注明出处。</p>
+<footer class="page-footer footnote"><hr><div class="text"><p>本站由 <a href="/">Jiaozi</a> 使用 <a target="_blank" rel="noopener" href="https://github.com/xaoxuu/hexo-theme-stellar/tree/1.33.1">Stellar 1.33.1</a> 主题创建。<br>本博客所有文章除特别声明外，均采用 <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a> 许可协议，转载请注明出处。</p>
 </div></footer>
 <div class="main-mask" onclick="sidebar.dismiss()"></div></div><aside class="l_right">
 <div class="widgets">
