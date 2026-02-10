@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="hexo-theme" content="https://github.com/xaoxuu/hexo-theme-stellar/tree/1.33.1" theme-name="Stellar" theme-version="1.33.1">
   
-  
+  <meta name="robots" content="noindex,follow">
   <meta name="generator" content="Hexo 7.3.0">
   <meta http-equiv='x-dns-prefetch-control' content='on' />
   
@@ -17,12 +17,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000">
   <meta name="theme-color" content="#f9fafb">
-  <title>Jiaozi's blog</title>
+  <title>标签：map - Jiaozi's blog</title>
 
   
     <meta property="og:type" content="website">
 <meta property="og:title" content="Jiaozi&#39;s blog">
-<meta property="og:url" content="https://wsp030914.github.io/">
+<meta property="og:url" content="https://wsp030914.github.io/tags/map/">
 <meta property="og:site_name" content="Jiaozi&#39;s blog">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="https://wsp030914.github.io/images/jz.jpg">
@@ -47,7 +47,7 @@
 
   
 
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Website","@id":"https://wsp030914.github.io","author":{"@type":"Person","name":"Jiaozi","sameAs":[],"image":"https://wsp030914.github.io/images/jz.jpg"},"name":"Jiaozi's blog","description":"","url":"https://wsp030914.github.io","keywords":["Hexo","Blog","Stellar"]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Website","@id":"https://wsp030914.github.io","author":{"@type":"Person","name":"Jiaozi","sameAs":[],"image":"https://wsp030914.github.io/images/jz.jpg"},"name":"Jiaozi's blog","description":"","url":"https://wsp030914.github.io"}</script>
   
 </head>
 <body><div class="sitebg"><div class="siteblur"></div></div>
@@ -71,23 +71,15 @@
 
 <header class="header mobile-only"><div class="logo-wrap"><a class="avatar" href="/"><div class="bg" style="opacity:0;background-image:url(https://gcore.jsdelivr.net/gh/cdn-x/placeholder@1.0.12/avatar/round/rainbow64@3x.webp);"></div><img no-lazy class="avatar" src="/images/jz.jpg" onerror="javascript:this.classList.add('error');this.src='https://gcore.jsdelivr.net/gh/cdn-x/placeholder@1.0.12/image/2659360.svg';"></a><a class="title" href="/"><div class="main">Jiaozi's blog</div><div class="sub cap">欢迎大家</div></a></div></header>
 
+ 
 
 
 
-<div class="navbar top"><div class="navbar-blur"><div class="navbar-container"><nav class="post"><a class="active" href="/">近期发布</a><a href="/tags/">标签</a><a href="/archives/">归档</a></nav></div></div></div>
+
+<div class="navbar top"><div class="navbar-blur"><div class="navbar-container"><nav class="post"><a href="/">近期发布</a><a class="active" href="/tags/">标签：map</a><a href="/archives/">归档</a></nav></div></div></div>
 <div class="post-list post"><div class="post-card-wrap"><a class="post-card post" href="/2026/02/10/%E8%A7%A3%E8%AF%BB%E6%96%B0%E7%9A%84map%E5%AE%9E%E7%8E%B0/">
 <article class="md-text"><h2 class="post-title">全新存储方式的 map</h2><div class="excerpt"><p>Map在go 1.24中，对于map的存储更换了新的存储方法，使用Swiss table的方式存储数据，优化了map的操作，下面我们展开讨论map的实现，以下表述默认 64 位架构
 首先是简介对hash冲突的解决方法，因为某个 key 应该落在哪个槽...</p></div><div class="meta cap"><span class="cap" id="post-meta"><svg style="margin-bottom:2px" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M6.94 2c.416 0 .753.324.753.724v1.46c.668-.012 1.417-.012 2.26-.012h4.015c.842 0 1.591 0 2.259.013v-1.46c0-.4.337-.725.753-.725s.753.324.753.724V4.25c1.445.111 2.394.384 3.09 1.055c.698.67.982 1.582 1.097 2.972L22 9H2v-.724c.116-1.39.4-2.302 1.097-2.972c.697-.67 1.645-.944 3.09-1.055V2.724c0-.4.337-.724.753-.724"/><path fill="currentColor" d="M22 14v-2c0-.839-.004-2.335-.017-3H2.01c-.013.665-.01 2.161-.01 3v2c0 3.771 0 5.657 1.172 6.828C4.343 22 6.228 22 10 22h4c3.77 0 5.656 0 6.828-1.172C22 19.658 22 17.772 22 14" opacity=".5"/><path fill="currentColor" d="M18 17a1 1 0 1 1-2 0a1 1 0 0 1 2 0m0-4a1 1 0 1 1-2 0a1 1 0 0 1 2 0m-5 4a1 1 0 1 1-2 0a1 1 0 0 1 2 0m0-4a1 1 0 1 1-2 0a1 1 0 0 1 2 0m-5 4a1 1 0 1 1-2 0a1 1 0 0 1 2 0m0-4a1 1 0 1 1-2 0a1 1 0 0 1 2 0"/></svg><time datetime="2026-02-10T03:02:02.000Z">2026-02-10</time></span></div></article>
-</a></div><div class="post-card-wrap"><a class="post-card post" href="/2026/02/02/channel%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/">
-<article class="md-text"><h2 class="post-title">channel 源码浅读</h2><div class="excerpt"><p>channel不要通过共享内存来通信，而要通过通信来共享内存
-以下是 go 1.24.4版本的 channel 的实现,尝试去解读
-数据结构
-
-hchan
-123456789101112131415type hchan struct &#123;	q...</p></div><div class="meta cap"><span class="cap" id="post-meta"><svg style="margin-bottom:2px" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M6.94 2c.416 0 .753.324.753.724v1.46c.668-.012 1.417-.012 2.26-.012h4.015c.842 0 1.591 0 2.259.013v-1.46c0-.4.337-.725.753-.725s.753.324.753.724V4.25c1.445.111 2.394.384 3.09 1.055c.698.67.982 1.582 1.097 2.972L22 9H2v-.724c.116-1.39.4-2.302 1.097-2.972c.697-.67 1.645-.944 3.09-1.055V2.724c0-.4.337-.724.753-.724"/><path fill="currentColor" d="M22 14v-2c0-.839-.004-2.335-.017-3H2.01c-.013.665-.01 2.161-.01 3v2c0 3.771 0 5.657 1.172 6.828C4.343 22 6.228 22 10 22h4c3.77 0 5.656 0 6.828-1.172C22 19.658 22 17.772 22 14" opacity=".5"/><path fill="currentColor" d="M18 17a1 1 0 1 1-2 0a1 1 0 0 1 2 0m0-4a1 1 0 1 1-2 0a1 1 0 0 1 2 0m-5 4a1 1 0 1 1-2 0a1 1 0 0 1 2 0m0-4a1 1 0 1 1-2 0a1 1 0 0 1 2 0m-5 4a1 1 0 1 1-2 0a1 1 0 0 1 2 0m0-4a1 1 0 1 1-2 0a1 1 0 0 1 2 0"/></svg><time datetime="2026-02-02T11:52:02.000Z">2026-02-02</time></span></div></article>
-</a></div><div class="post-card-wrap"><a class="post-card post" href="/2026/01/29/context%E6%BA%90%E7%A0%81%E6%B5%85%E8%AF%BB/">
-<article class="md-text"><h2 class="post-title">context 源码浅读</h2><div class="excerpt"><p>context通常用来并发协调以及对 goroutine 的生命周期控制.
-笔者在使用context的时候想要了解几种context的实现与相关操作，因此基于go 1.24 进行查看和尝试解读。第一次输出文章有哪些错误和解读未到位的地方欢迎指出，望大...</p></div><div class="meta cap"><span class="cap" id="post-meta"><svg style="margin-bottom:2px" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M6.94 2c.416 0 .753.324.753.724v1.46c.668-.012 1.417-.012 2.26-.012h4.015c.842 0 1.591 0 2.259.013v-1.46c0-.4.337-.725.753-.725s.753.324.753.724V4.25c1.445.111 2.394.384 3.09 1.055c.698.67.982 1.582 1.097 2.972L22 9H2v-.724c.116-1.39.4-2.302 1.097-2.972c.697-.67 1.645-.944 3.09-1.055V2.724c0-.4.337-.724.753-.724"/><path fill="currentColor" d="M22 14v-2c0-.839-.004-2.335-.017-3H2.01c-.013.665-.01 2.161-.01 3v2c0 3.771 0 5.657 1.172 6.828C4.343 22 6.228 22 10 22h4c3.77 0 5.656 0 6.828-1.172C22 19.658 22 17.772 22 14" opacity=".5"/><path fill="currentColor" d="M18 17a1 1 0 1 1-2 0a1 1 0 0 1 2 0m0-4a1 1 0 1 1-2 0a1 1 0 0 1 2 0m-5 4a1 1 0 1 1-2 0a1 1 0 0 1 2 0m0-4a1 1 0 1 1-2 0a1 1 0 0 1 2 0m-5 4a1 1 0 1 1-2 0a1 1 0 0 1 2 0m0-4a1 1 0 1 1-2 0a1 1 0 0 1 2 0"/></svg><time datetime="2026-01-29T15:00:32.000Z">2026-01-29</time></span></div></article>
 </a></div></div>
 
 
